@@ -16,8 +16,23 @@ CREATE TABLE IF NOT EXISTS transactions (
   status TEXT NOT NULL DEFAULT 'POSTED',
   currency CHAR(3) NOT NULL,
   amount_cents BIGINT NOT NULL CHECK (amount_cents > 0),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 );
+-- Upgrade existing databases without rewriting their recorded timestamps.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = current_schema()
+      AND table_name = 'transactions'
+      AND column_name = 'created_at'
+      AND column_default IS DISTINCT FROM 'clock_timestamp()'
+  ) THEN
+    ALTER TABLE transactions ALTER COLUMN created_at SET DEFAULT clock_timestamp();
+  END IF;
+END;
+$$;
 CREATE INDEX IF NOT EXISTS txn_order ON transactions (created_at DESC, id DESC);
 
 CREATE TABLE IF NOT EXISTS ledger_entries (

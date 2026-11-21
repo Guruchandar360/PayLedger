@@ -5,8 +5,10 @@ from sqlalchemy import func, select, update
 
 from app.config import MAX_AMOUNT, MAX_BALANCE
 from app.models import Account, IdempotencyKey, Transaction
+from app.schemas import TransferCreate
 from app.services.accounts import lock_accounts
 from app.services.posting import post_entries
+from app.services.transfers import make_transfer
 from helpers import account, assert_ledger_consistent, balance, deposit, transfer, transfer_body
 
 
@@ -126,6 +128,19 @@ def test_customer_balance_limit_applies_to_both_credit_paths(app, client):
     assert balance(client, sender) == 1
     with app.state.sessions() as session:
         assert_ledger_consistent(session)
+
+
+def test_transfer_timestamp_reflects_posting_time(app, client):
+    sender, receiver = account(client), account(client)
+    assert deposit(client, sender, 100).status_code == 201
+    body = TransferCreate.model_validate(transfer_body(sender, receiver, 100))
+
+    with app.state.sessions.begin() as session:
+        started_at = session.scalar(select(func.transaction_timestamp()))
+        session.execute(select(func.pg_sleep(0.05)))
+        before_posting = session.scalar(select(func.clock_timestamp()))
+        posted = make_transfer(session, body)
+        assert started_at < before_posting <= posted.created_at
 
 
 def test_history_paginates_on_timestamp_and_transaction_id(app, client):

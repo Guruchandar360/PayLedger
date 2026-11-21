@@ -14,6 +14,16 @@ The API listens on loopback. Open [Swagger UI](http://127.0.0.1:8000/docs) to tr
 
 For local development, use Python 3.12 and install the dependencies. You can run just PostgreSQL with `docker compose up -d db`. For an existing PostgreSQL 16 server, create a dedicated `payledger` database and set `DATABASE_URL` to its `postgresql+psycopg://` connection string.
 
+**macOS and Linux**
+
+```sh
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+**Windows PowerShell**
+
 ```powershell
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
@@ -22,7 +32,15 @@ py -3.12 -m venv .venv
 
 ## Demo
 
-From the project directory, with the API running:
+From the project directory, with the API running, use the command for your platform.
+
+**macOS and Linux**
+
+```sh
+.venv/bin/python demo.py
+```
+
+**Windows PowerShell**
 
 ```powershell
 .\.venv\Scripts\python.exe demo.py
@@ -56,7 +74,7 @@ flowchart TD
 - **Money and accounting.** Amounts are integer minor units in `BIGINT`. For INR, `100000` means ₹1,000 in paise. Accepted amounts are 1 to 10¹², and customer balances are capped at 10¹⁵. A deposit credits the customer and debits the internal funding account in the same currency. A transfer debits the sender and credits the receiver. Balance changes and ledger entries commit together.
 - **Competing transfers.** PostgreSQL uses `READ COMMITTED`. Each operation locks both accounts in ascending UUID order, then reads the current balances. A second request against the same sender waits and sees the updated balance. The shared ordering prevents a cycle between operations that lock the same two accounts in opposite directions.
 - **Retries and failures.** The unique key decides which request may execute. A retry with the same validated body gets the saved status and body, including for business rejections. A different body or endpoint gets `409`. A fresh attempt after adding funds requires a new key. An unexpected failure rolls back the posting and key claim, so retrying the same key can execute again.
-- **History.** Each account shows its own side of a posting. The cursor uses the transaction timestamp and UUID to give a stable order even when timestamps match.
+- **History.** Each account shows its own side of a posting. PostgreSQL assigns `created_at` with `clock_timestamp()` when the ledger transaction row is inserted, after the account locks are acquired. The cursor sorts by that timestamp and uses the transaction UUID to break ties. [PostgreSQL date and time functions](https://www.postgresql.org/docs/16/functions-datetime.html#FUNCTIONS-DATETIME-CURRENT)
 
 ## Run the tests
 
@@ -67,6 +85,15 @@ docker compose exec db createdb -U payledger payledger_test
 ```
 
 For a native PostgreSQL instance, create `payledger_test` and set `TEST_DATABASE_URL` to its connection string. The database role must be able to create schemas. Tests create and remove their own isolated schemas and exercise a real Uvicorn server with HTTPX.
+
+**macOS and Linux**
+
+```sh
+.venv/bin/python -m pytest -q
+.venv/bin/python -m pytest -q tests/test_concurrency.py tests/test_rollback.py
+```
+
+**Windows PowerShell**
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q
@@ -81,8 +108,4 @@ The headline tests cover 50 competing transfers, ten concurrent requests with th
 - The API is unauthenticated and intended for loopback use. Deposits simulate funding.
 - Each currency's funding account serializes deposits on one row. Separate funding accounts or batching would reduce that contention.
 - v1 supports INR, USD, and GBP without conversion. Refunds, reversals, and multi-instance deployment are outside the demo.
-
-## Résumé bullets
-
-- Built PayLedger, a FastAPI and PostgreSQL payments API with a double-entry ledger, atomic balance updates, and replay-safe deposits and transfers.
-- Verified PostgreSQL row locking and idempotency with 50 competing transfers and 10 concurrent retries. Confirmed that a forced failure after the debit rolled back balances, ledger entries, and the idempotency claim.
+- History pages are live reads. Because `created_at` records insertion time, a row that commits after the client has paged past its timestamp can be missed until history is refreshed.

@@ -29,7 +29,9 @@ class Transaction(Base):
     status: Mapped[str] = mapped_column(Text, server_default=text("'POSTED'"))
     currency: Mapped[str] = mapped_column(CHAR(3))
     amount_cents: Mapped[int] = mapped_column(BigInteger)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=text("clock_timestamp()")
+    )
 
 
 class LedgerEntry(Base):
