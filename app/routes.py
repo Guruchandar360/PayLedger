@@ -1,12 +1,20 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Response
+from fastapi import APIRouter, Depends, Header, Query, Response
 from sqlalchemy.orm import Session
 
 from app.db import get_session
-from app.schemas import AccountCreate, AccountView, DepositCreate, DepositView, TransferCreate, TransferView
-from app.services import accounts, deposits, idempotency, transfers
+from app.schemas import (
+    AccountCreate,
+    AccountView,
+    DepositCreate,
+    DepositView,
+    HistoryPage,
+    TransferCreate,
+    TransferView,
+)
+from app.services import accounts, deposits, history, idempotency, transfers
 
 router = APIRouter()
 DatabaseSession = Annotated[Session, Depends(get_session)]
@@ -31,6 +39,16 @@ def deposit(body: DepositCreate, session: DatabaseSession, key: IdempotencyHeade
 @router.post("/transfers", status_code=201, response_model=TransferView)
 def transfer(body: TransferCreate, session: DatabaseSession, key: IdempotencyHeader) -> Response:
     return payment_response(transfers.transfer(session, key, body))
+
+
+@router.get("/accounts/{id}/transactions")
+def get_history(
+    id: UUID,
+    session: DatabaseSession,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    cursor: Annotated[str | None, Query(max_length=256)] = None,
+) -> HistoryPage:
+    return history.history(session, id, limit, cursor)
 
 
 def payment_response(result: idempotency.PaymentResult) -> Response:

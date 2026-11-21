@@ -1,8 +1,8 @@
 from datetime import datetime
 from typing import Annotated, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
-from uuid import UUID
 
 from app.config import CURRENCIES, MAX_AMOUNT
 
@@ -50,3 +50,17 @@ class TransferView(BaseModel):
     amount_cents: int
     currency: Currency
     created_at: datetime
+
+
+class HistoryItem(BaseModel):
+    transaction_id: UUID
+    type: Literal["DEPOSIT", "TRANSFER"]
+    status: Literal["POSTED"]
+    direction: Literal["DEBIT", "CREDIT"]
+    amount_cents: int
+    created_at: datetime
+
+
+class HistoryPage(BaseModel):
+    items: list[HistoryItem]
+    next_cursor: str | None
