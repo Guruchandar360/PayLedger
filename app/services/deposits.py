@@ -5,13 +5,12 @@ from app.config import MAX_BALANCE
 from app.errors import DomainError
 from app.models import Account
 from app.schemas import DepositCreate, DepositView
-from app.services import posting
+from app.services import idempotency, posting
 from app.services.accounts import get_account, lock_accounts
 
 
-def deposit(session: Session, body: DepositCreate) -> DepositView:
-    with session.begin():
-        return make_deposit(session, body)
+def deposit(session: Session, key: str, body: DepositCreate) -> idempotency.PaymentResult:
+    return idempotency.run(session, key, "deposit", body, lambda: make_deposit(session, body))
 
 
 def make_deposit(session: Session, body: DepositCreate) -> DepositView:

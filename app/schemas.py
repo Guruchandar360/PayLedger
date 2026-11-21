@@ -34,3 +34,19 @@ class DepositView(BaseModel):
     amount_cents: int
     currency: Currency
     created_at: datetime
+
+
+class TransferCreate(BaseModel):
+    sender_id: UUID
+    receiver_id: UUID
+    amount_cents: Amount
+
+
+class TransferView(BaseModel):
+    transaction_id: UUID
+    type: Literal["TRANSFER"]
+    sender_id: UUID
+    receiver_id: UUID
+    amount_cents: int
+    currency: Currency
+    created_at: datetime
