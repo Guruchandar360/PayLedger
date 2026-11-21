@@ -1,5 +1,6 @@
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.errors import DomainError
@@ -20,3 +21,18 @@ def get_account(session: Session, account_id: UUID) -> Account:
     if account is None or account.is_internal:
         raise DomainError("ACCOUNT_NOT_FOUND", 404, "Account not found")
     return account
+
+
+def lock_accounts(session: Session, ids: list[UUID]) -> dict[UUID, Account]:
+    locked = {}
+    for account_id in sorted(ids):
+        account = session.scalar(
+            select(Account)
+            .where(Account.id == account_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if account is None:
+            raise DomainError("ACCOUNT_NOT_FOUND", 404, "Account not found")
+        locked[account_id] = account
+    return locked
